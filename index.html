@@ -1,0 +1,1783 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GramViz — 3D DOA Equalizer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Orbitron:wght@400;700&display=swap');
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        :root {
+            --bg: #06060e;
+            --panel: rgba(0, 0, 0, 0.4);
+            --border: rgba(255, 255, 255, 0.07);
+            --accent: #7c3aed;
+            --glow: rgba(124, 58, 237, .4);
+            --text: #ddd;
+            --dim: #888
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            overflow: hidden
+        }
+
+        /* ── Canvases ── */
+        #webgl-canvas {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* ── Start Screen ── */
+        #start {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, #15152a 0%, var(--bg) 80%);
+            transition: opacity .5s, visibility .5s
+        }
+
+        #start.gone {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none
+        }
+
+        .logo-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            margin-bottom: 10px
+        }
+
+        .logo {
+            font-family: 'Orbitron', monospace;
+            font-size: clamp(28px, 6vw, 64px);
+            font-weight: 700;
+            letter-spacing: 6px;
+            background: linear-gradient(135deg, #a78bfa, #60a5fa, #34d399);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: pulse 3s ease-in-out infinite
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                filter: drop-shadow(0 0 20px rgba(167, 139, 250, .4))
+            }
+
+            50% {
+                filter: drop-shadow(0 0 40px rgba(167, 139, 250, .8))
+            }
+        }
+
+        .sub {
+            color: var(--dim);
+            font-size: 14px;
+            letter-spacing: 4px;
+            margin-bottom: 48px;
+            text-transform: uppercase
+        }
+
+        .start-btn {
+            background: linear-gradient(135deg, #7c3aed, #4f46e5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 14px;
+            padding: 18px 54px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            box-shadow: 0 8px 32px rgba(124, 58, 237, .4);
+            transition: transform .2s, box-shadow .2s
+        }
+
+        .start-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 48px rgba(124, 58, 237, .6)
+        }
+
+        .hint {
+            margin-top: 24px;
+            color: var(--dim);
+            font-size: 12px;
+            text-align: center;
+            line-height: 1.9;
+            max-width: 400px
+        }
+
+        .hint strong {
+            color: var(--text);
+            font-weight: 600
+        }
+
+        /* ── UI ── */
+        #topbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 16px 22px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(to bottom, rgba(6, 6, 14, .9) 0%, transparent);
+            z-index: 20;
+            pointer-events: none
+        }
+
+        .tlogo {
+            font-family: 'Orbitron', monospace;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            background: linear-gradient(135deg, #a78bfa, #60a5fa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .ctrl-row {
+            display: flex;
+            gap: 10px;
+            pointer-events: all
+        }
+
+        .ibtn {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px 16px;
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: all .2s;
+            backdrop-filter: blur(16px)
+        }
+
+        .ibtn:hover {
+            background: rgba(124, 58, 237, .3);
+            border-color: var(--accent);
+            box-shadow: 0 0 16px var(--glow);
+            color: #fff
+        }
+
+        .ibtn.on {
+            background: rgba(124, 58, 237, .4);
+            border-color: var(--accent);
+            color: #fff
+        }
+
+        #infobar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 12px 22px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(to top, rgba(6, 6, 14, .9), transparent);
+            z-index: 20;
+            pointer-events: none
+        }
+
+        .flbl {
+            font-size: 11px;
+            color: var(--dim);
+            letter-spacing: 2px;
+            font-weight: 600
+        }
+
+        #pkval {
+            font-family: 'Orbitron', monospace;
+            font-size: 13px;
+            color: var(--text);
+            letter-spacing: 1px
+        }
+
+        /* ── Panel ── */
+        #panel {
+            position: fixed;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 320px;
+            background: rgba(10, 10, 18, .92);
+            border-left: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(24px);
+            padding: 80px 24px 24px;
+            overflow-y: auto;
+            transform: translateX(100%);
+            transition: transform .4s cubic-bezier(.4, 0, .2, 1);
+            z-index: 30;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent) transparent
+        }
+
+        #panel.open {
+            transform: none
+        }
+
+        .plbl {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--dim);
+            margin-bottom: 12px
+        }
+
+        .psec {
+            margin-bottom: 28px
+        }
+
+        .theme-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap
+        }
+
+        .tsw {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all .2s;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5)
+        }
+
+        .tsw:hover {
+            transform: scale(1.15)
+        }
+
+        .tsw.on {
+            border-color: #fff;
+            box-shadow: 0 0 14px rgba(255, 255, 255, .4), inset 0 2px 4px rgba(0, 0, 0, 0.5)
+        }
+
+        .sld-item {
+            margin-bottom: 16px
+        }
+
+        .sld-item label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--dim);
+            margin-bottom: 8px
+        }
+
+        .sld-item label span {
+            color: var(--text);
+            font-weight: 500
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, .1);
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: var(--accent);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--glow);
+            transition: transform .15s
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.3)
+        }
+
+        .tgl-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            color: var(--dim);
+            margin-bottom: 14px;
+            font-weight: 500
+        }
+
+        .tgl {
+            width: 42px;
+            height: 22px;
+            background: rgba(255, 255, 255, .1);
+            border-radius: 12px;
+            cursor: pointer;
+            position: relative;
+            transition: background .3s;
+            flex-shrink: 0
+        }
+
+        .tgl.on {
+            background: var(--accent)
+        }
+
+        .tgl::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            top: 3px;
+            left: 3px;
+            transition: left .3s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, .4)
+        }
+
+        .tgl.on::after {
+            left: 23px
+        }
+
+        /* Button Grids */
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .btn-grid button {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+            color: var(--dim);
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .btn-grid button:hover {
+            background: rgba(124, 58, 237, .2);
+            color: var(--text);
+            border-color: rgba(124, 58, 237, .5);
+        }
+
+        .btn-grid button.on {
+            background: rgba(124, 58, 237, .3);
+            color: #fff;
+            border-color: var(--accent);
+            box-shadow: 0 0 12px var(--glow);
+        }
+
+        /* Select Dropdown */
+        .vsel {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            outline: none;
+            cursor: pointer;
+            backdrop-filter: blur(16px);
+            appearance: none;
+            -webkit-appearance: none;
+        }
+
+        .vsel:hover {
+            border-color: rgba(124, 58, 237, 0.5);
+        }
+
+        .vsel:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 10px var(--glow);
+        }
+
+        .vsel option {
+            background: var(--bg);
+            color: var(--text);
+            padding: 8px;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+
+<body>
+
+    <canvas id="webgl-canvas"></canvas>
+
+    <div id="start">
+        <div class="logo-row">
+            <div class="logo">GramViz 3D</div>
+        </div>
+        <div class="sub">DOA Xtreme Equalizer</div>
+        <button class="start-btn" id="startBtn" disabled>Loading...</button>
+        <div class="hint">When the dialog opens, select the <strong>Entire Screen</strong> tab and check <strong>"Share
+                system audio"</strong> before clicking Share.<br><br>The 3D models will dance to your music. Proportions
+            scale left-to-right!</div>
+    </div>
+
+    <div id="topbar">
+        <div class="tlogo">GramViz 3D</div>
+        <div class="ctrl-row">
+            <button class="ibtn" id="fsBtn">⛶ Fullscreen</button>
+            <button class="ibtn" id="settBtn">⚙ Customize</button>
+        </div>
+    </div>
+
+    <div id="infobar">
+        <div class="flbl" id="flbl">BASS ←———————→ TREBLE</div>
+        <div id="pkval">PEAK: —</div>
+    </div>
+
+    <div id="panel">
+        <div class="psec">
+            <div class="plbl">Visualizer Style</div>
+            <select id="vstyle" class="vsel">
+                <!-- Populated via JS -->
+            </select>
+        </div>
+
+        <div class="psec">
+            <div class="plbl">Lighting Theme</div>
+            <div class="theme-row" id="themeRow"></div>
+        </div>
+
+        <div class="psec">
+            <div class="plbl">Camera Angle</div>
+            <div class="btn-grid">
+                <button class="cam-btn on" data-cam="front">Front View</button>
+                <button class="cam-btn" data-cam="high">High Angle</button>
+                <button class="cam-btn" data-cam="side">Side Angle</button>
+                <button class="cam-btn" data-cam="auto">Auto Pan</button>
+            </div>
+        </div>
+
+        <div class="psec">
+            <div class="plbl">Controls</div>
+            <div class="sld-item"><label>Sensitivity <span id="sv">80%</span></label><input type="range" id="sens"
+                    min="10" max="250" value="80"></div>
+            <div class="sld-item"><label>Smoothing <span id="smv">75%</span></label><input type="range" id="smooth"
+                    min="0" max="95" value="75"></div>
+            <div class="sld-item"><label>Size/Scale <span id="szv">100%</span></label><input type="range" id="size"
+                    min="10" max="300" value="100"></div>
+            <div class="sld-item"><label>Intensity/Glow <span id="intv">100%</span></label><input type="range"
+                    id="inten" min="0" max="200" value="100"></div>
+            <div class="sld-item"><label>Movement Speed <span id="spv">50%</span></label><input type="range" id="spin"
+                    min="0" max="100" value="50"></div>
+            <div class="sld-item"><label>Elements/Density <span id="dv">16</span></label><input type="range" id="dcnt"
+                    min="4" max="128" value="16" step="1"></div>
+        </div>
+
+        <div class="psec">
+            <div class="plbl">Options</div>
+            <div class="tgl-row">Floor Grid <div class="tgl on" id="tGrid"></div>
+            </div>
+            <div class="tgl-row">Lighting Pulse <div class="tgl on" id="tLight"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ─── STATE ──────────────────────────────────────────────────────────────────
+        const THEMES = [
+            { name: 'Miami', c1: 0xff00ff, c2: 0x00ffff, grid: 0x00ffff, floor: 0x05050f },
+            { name: 'Sunset', c1: 0xff5500, c2: 0xff0055, grid: 0xffaa00, floor: 0x0f0505 },
+            { name: 'Ocean', c1: 0x00aaff, c2: 0x00ffaa, grid: 0x0088ff, floor: 0x050a0f },
+            { name: 'Toxic', c1: 0x55ff00, c2: 0x00ff00, grid: 0xaaff00, floor: 0x050f05 },
+            { name: 'Gold', c1: 0xffcf00, c2: 0xff8800, grid: 0xffbb00, floor: 0x0f0a05 },
+            { name: 'Vamp', c1: 0xff0000, c2: 0x550000, grid: 0xff0000, floor: 0x0f0000 },
+            { name: 'Ice', c1: 0xffffff, c2: 0xaaaaff, grid: 0xffffff, floor: 0x0f0f15 },
+            { name: 'Club', c1: 0x8800ff, c2: 0xff00ff, grid: 0xaa00ff, floor: 0x08000f }
+        ];
+
+        const ST = {
+            theme: 0, style: 0, sens: 80, smooth: 0.75, size: 1.0, inten: 1.0, spinSpd: 0.02, dcnt: 32, // boosted default items
+            grid: true, lightPulse: true, cam: 'front',
+            analyser: null, freqBuf: null, timeBuf: null,
+            audioBaseTime: 0, autoCamAngle: 0
+        };
+
+        // ─── THREE.JS INIT ──────────────────────────────────────────────────────────
+        const canvas = document.getElementById('webgl-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // performance cap
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        // Tone mapping for intense colors
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+
+        const scene = new THREE.Scene();
+
+        // Camera
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
+        updateCamera();
+
+        function updateCamera() {
+            const span = Math.max(80, ST.dcnt * 4);
+            if (ST.cam === 'front') {
+                camera.position.set(0, 16, span * 0.8);
+                camera.lookAt(0, 8, 0);
+            } else if (ST.cam === 'high') {
+                camera.position.set(0, span * 0.6, span * 0.4);
+                camera.lookAt(0, 0, 0);
+            } else if (ST.cam === 'side') {
+                camera.position.set(-span * 0.8, 12, span * 0.4);
+                camera.lookAt(span * 0.2, 8, 0);
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Lights
+        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambient);
+
+        const pointLight1 = new THREE.PointLight(THEMES[ST.theme].c1, 1.5, 300);
+        pointLight1.position.set(-40, 30, 30);
+        pointLight1.castShadow = true;
+        scene.add(pointLight1);
+
+        const pointLight2 = new THREE.PointLight(THEMES[ST.theme].c2, 1.5, 300);
+        pointLight2.position.set(40, 20, 30);
+        scene.add(pointLight2);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        dirLight.position.set(0, 50, 20);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        scene.add(dirLight);
+
+        // Floor Grid
+        let gridObj = new THREE.Group();
+        let floorMat;
+        scene.add(gridObj);
+
+        function buildGrid() {
+            gridObj.clear();
+            if (!ST.grid) return;
+
+            const theme = THEMES[ST.theme];
+
+            const grid = new THREE.GridHelper(400, 80, theme.grid, theme.c2);
+            grid.position.y = 0;
+            grid.material.opacity = 0.3;
+            grid.material.transparent = true;
+            gridObj.add(grid);
+
+            // Create highly reflective floor for styles like Vecteezy blocks
+            const isGlossy = (VISUALIZERS[ST.style] && VISUALIZERS[ST.style].needsGlossyFloor);
+
+            const floorGeo = new THREE.PlaneGeometry(400, 400);
+            floorMat = new THREE.MeshStandardMaterial({
+                color: theme.floor,
+                roughness: isGlossy ? 0.05 : 0.4,
+                metalness: isGlossy ? 0.9 : 0.6
+            });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = -0.1;
+            floor.receiveShadow = true;
+            gridObj.add(floor);
+        }
+
+        // ─── VISUALIZER MODULES ──────────────────────────────────────────────────────
+
+        class VisualizerDOA {
+            constructor() {
+                this.name = "1. DOA Girls";
+                this.needsGlossyFloor = false;
+                this.girls = [];
+                this.group = new THREE.Group();
+                this.skinTones = [0xffdca8, 0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524];
+                this.geometries = [];
+                this.materials = [];
+            }
+
+            track(obj) {
+                if (obj.isGeometry) this.geometries.push(obj);
+                if (obj.isMaterial) this.materials.push(obj);
+                return obj;
+            }
+
+            init(count, parentGroup) {
+                parentGroup.add(this.group);
+
+                // Keep girls count reasonable max 32 for performance, otherwise it lags
+                const actualCount = Math.min(count, 32);
+                const span = 10 * ST.size; // apply size to spacing
+                const startX = -(actualCount - 1) * span / 2;
+
+                // Common geometries (track them)
+                this.limbGeo = this.track(new THREE.CylinderGeometry(0.6, 0.45, 4.5, 16).translate(0, -2.25, 0));
+                this.calfGeo = this.track(new THREE.CylinderGeometry(0.5, 0.35, 5.0, 16).translate(0, -2.5, 0));
+                this.breastGeo = this.track(new THREE.SphereGeometry(1, 24, 24));
+                this.headGeo = this.track(new THREE.SphereGeometry(1.4, 24, 24));
+                this.hairGeo = this.track(new THREE.SphereGeometry(1.5, 24, 24, 0, Math.PI * 2, 0, Math.PI / 1.5));
+                this.armGeo = this.track(new THREE.CylinderGeometry(0.45, 0.35, 4.0, 16).translate(0, -2.0, 0));
+                this.pelvisGeo = this.track(new THREE.CylinderGeometry(1.7, 1.4, 1.8, 20));
+                this.bellyGeo = this.track(new THREE.CylinderGeometry(1.4, 1.6, 1.5, 20));
+
+                for (let i = 0; i < actualCount; i++) {
+                    const g = this.createGirl(i, actualCount, startX, span);
+                    this.group.add(g.group);
+                    this.girls.push(g);
+                }
+            }
+
+            createGirl(index, total, startX, spacing) {
+                const group = new THREE.Group();
+                group.position.set((startX + index * spacing), 0, 0);
+
+                // Apply global sizing
+                group.scale.setScalar(ST.size);
+
+                const skinC = this.skinTones[index % this.skinTones.length];
+                const skinMat = this.track(new THREE.MeshPhysicalMaterial({
+                    color: skinC, roughness: 0.25, metalness: 0.15, clearcoat: 0.3, clearcoatRoughness: 0.2
+                }));
+
+                const bikC = new THREE.Color().setHSL(Math.random(), 0.9, 0.5);
+                const bikiniMat = this.track(new THREE.MeshPhysicalMaterial({
+                    color: bikC, roughness: 0.1, metalness: 0.7, clearcoat: 1.0, emissive: bikC, emissiveIntensity: 0.2 * ST.inten
+                }));
+
+                const hairMat = this.track(new THREE.MeshStandardMaterial({
+                    color: new THREE.Color().setHSL(Math.random(), 0.6, 0.2), roughness: 0.8
+                }));
+
+                // 1. Hips (root of movement)
+                const hips = new THREE.Group(); hips.position.y = 10; group.add(hips);
+                const pelvis = new THREE.Mesh(this.pelvisGeo, bikiniMat);
+                pelvis.castShadow = pelvis.receiveShadow = true; hips.add(pelvis);
+
+                // 2. Torso
+                const torso = new THREE.Group(); torso.position.y = 0.9; hips.add(torso);
+                const belly = new THREE.Mesh(this.bellyGeo, skinMat);
+                belly.position.y = 0.75; belly.castShadow = belly.receiveShadow = true; torso.add(belly);
+                const chestBase = new THREE.Mesh(this.pelvisGeo, skinMat); // reuse geo
+                chestBase.position.y = 2.4; chestBase.castShadow = chestBase.receiveShadow = true; torso.add(chestBase);
+                const topWrap = new THREE.Mesh(this.bellyGeo, bikiniMat); // reuse geo
+                topWrap.position.y = 2.4; topWrap.scale.y = 0.5; torso.add(topWrap);
+
+                const breastScale = 0.6 + 3.2 * (index / Math.max(1, total - 1));
+                const lBreast = new THREE.Mesh(this.breastGeo, bikiniMat);
+                lBreast.position.set(-0.75, 2.5, 1.15); lBreast.scale.set(breastScale, breastScale, breastScale * 1.25);
+                lBreast.castShadow = lBreast.receiveShadow = true; torso.add(lBreast);
+
+                const rBreast = new THREE.Mesh(this.breastGeo, bikiniMat);
+                rBreast.position.set(0.75, 2.5, 1.15); rBreast.scale.set(breastScale, breastScale, breastScale * 1.25);
+                rBreast.castShadow = rBreast.receiveShadow = true; torso.add(rBreast);
+
+                // 3. Head & Hair
+                const head = new THREE.Mesh(this.headGeo, skinMat); head.position.y = 4.8; head.castShadow = true; torso.add(head);
+                const hair = new THREE.Mesh(this.hairGeo, hairMat); hair.position.y = 4.9; hair.castShadow = true; torso.add(hair);
+
+                // 4. Arms
+                const lArm = new THREE.Group(); lArm.position.set(-2.0, 3.0, 0); torso.add(lArm);
+                const rArm = new THREE.Group(); rArm.position.set(2.0, 3.0, 0); torso.add(rArm);
+                const lArmMesh = new THREE.Mesh(this.armGeo, skinMat); lArm.add(lArmMesh);
+                const rArmMesh = new THREE.Mesh(this.armGeo, skinMat); rArm.add(rArmMesh);
+                lArm.rotation.z = 0.3; rArm.rotation.z = -0.3;
+
+                // 5. Legs
+                const lLeg = new THREE.Group(); lLeg.position.set(-0.8, -0.6, 0); hips.add(lLeg);
+                const rLeg = new THREE.Group(); rLeg.position.set(0.8, -0.6, 0); hips.add(rLeg);
+                const lThigh = new THREE.Mesh(this.limbGeo, skinMat); lThigh.castShadow = true; lLeg.add(lThigh);
+                const rThigh = new THREE.Mesh(this.limbGeo, skinMat); rThigh.castShadow = true; rLeg.add(rThigh);
+                const lCalf = new THREE.Group(); lCalf.position.y = -4.5; lThigh.add(lCalf);
+                const rCalf = new THREE.Group(); rCalf.position.y = -4.5; rThigh.add(rCalf);
+                const lCalfMesh = new THREE.Mesh(this.calfGeo, skinMat); lCalfMesh.castShadow = true; lCalf.add(lCalfMesh);
+                const rCalfMesh = new THREE.Mesh(this.calfGeo, skinMat); rCalfMesh.castShadow = true; rCalf.add(rCalfMesh);
+
+                group.rotation.y = Math.random() * Math.PI * 2;
+
+                return {
+                    group, hips, torso, lArm, rArm, lLeg, rLeg, lThigh, rThigh, lCalf, rCalf, lBreast, rBreast,
+                    baseBreastY: 2.5,
+                    update: function (amp) {
+                        group.rotation.y += ST.spinSpd * 10 + (amp * 0.03);
+                        const squat = amp * 4.5;
+                        hips.position.y = 10 - squat;
+                        const dist = hips.position.y - 0.6;
+                        if (dist < 9.5 && dist > 1.0) {
+                            let d = Math.max(0.1, Math.min(dist, 9.49));
+                            const A = Math.acos((20.25 + d * d - 25.0) / (9.0 * d));
+                            lThigh.rotation.x = rThigh.rotation.x = isNaN(A) ? 0 : A;
+                            const B = Math.acos((20.25 + 25.0 - d * d) / 45.0);
+                            const kneeAng = -(Math.PI - (isNaN(B) ? 0 : B));
+                            lCalf.rotation.x = rCalf.rotation.x = kneeAng;
+                        } else {
+                            lThigh.rotation.x = rThigh.rotation.x = lCalf.rotation.x = rCalf.rotation.x = 0;
+                        }
+                        torso.rotation.x = amp * 0.35;
+                        lArm.rotation.x = rArm.rotation.x = -amp * 0.6;
+                        lArm.rotation.z = 0.3 + (amp * 0.4);
+                        rArm.rotation.z = -0.3 - (amp * 0.4);
+                        const jiggle = amp * 0.4 * (breastScale / 2);
+                        lBreast.position.y = rBreast.position.y = this.baseBreastY - jiggle;
+                    }
+                };
+            }
+
+            update(freqArray, timeArray, peakVal) {
+                const usableBins = Math.floor(freqArray.length * 0.25);
+                for (let i = 0; i < this.girls.length; i++) {
+                    const idx = Math.floor((i / this.girls.length) * usableBins);
+                    const val = freqArray[idx];
+                    const amp = (val / 255) * (ST.sens / 80);
+                    this.girls[i].update(amp);
+                }
+            }
+
+            destroy() {
+                this.geometries.forEach(g => g.dispose());
+                this.materials.forEach(m => m.dispose());
+                this.group.clear();
+            }
+        }
+
+        class VisualizerVecteezyBlocks {
+            constructor() {
+                this.name = "2. Vecteezy Reflex Blocks";
+                this.needsGlossyFloor = true; // Demands glossy mirror floor!
+                this.blocks = [];
+                this.group = new THREE.Group();
+                this.geometries = [];
+                this.materials = [];
+            }
+            track(obj) {
+                if (obj.isGeometry) this.geometries.push(obj);
+                if (obj.isMaterial) this.materials.push(obj);
+                return obj;
+            }
+            init(count, parentGroup) {
+                parentGroup.add(this.group);
+
+                // Box geometry
+                const geo = this.track(new THREE.BoxGeometry(1, 1, 1));
+                geo.translate(0, 0.5, 0); // Origin at bottom
+
+                const span = 4.5 * ST.size;
+                const startX = -(count - 1) * span / 2;
+
+                for (let i = 0; i < count; i++) {
+                    // Vibrant colors transitioning over the rainbow
+                    const hue = (i / count);
+                    const c = new THREE.Color().setHSL(hue, 1.0, 0.5);
+
+                    const mat = this.track(new THREE.MeshPhysicalMaterial({
+                        color: c,
+                        emissive: c,
+                        emissiveIntensity: 0.2 * ST.inten,
+                        metalness: 0.8,
+                        roughness: 0.1, // Shiny
+                        clearcoat: 1.0
+                    }));
+
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(startX + i * span, 0, 0);
+                    mesh.scale.set(3.5 * ST.size, 1, 3.5 * ST.size);
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+
+                    this.group.add(mesh);
+                    this.blocks.push(mesh);
+                }
+            }
+            update(freqArray, timeArray, peakVal) {
+                const usableBins = Math.floor(freqArray.length * 0.6); // Higher frequency range
+                for (let i = 0; i < this.blocks.length; i++) {
+                    const idx = Math.floor((i / this.blocks.length) * usableBins);
+                    const val = freqArray[idx] / 255.0;
+
+                    // Height calculation based on amplitude
+                    const targetHeight = 1 + val * 40 * (ST.sens / 80) * ST.size;
+
+                    // Linear interpolation (lerp) for smooth bounce
+                    this.blocks[i].scale.y += (targetHeight - this.blocks[i].scale.y) * 0.3;
+
+                    // Spin support
+                    this.blocks[i].rotation.y += ST.spinSpd * val;
+
+                    // Intense glow based on amplitude
+                    this.blocks[i].material.emissiveIntensity = val * 2.0 * ST.inten;
+                }
+            }
+            destroy() {
+                this.geometries.forEach(g => g.dispose());
+                this.materials.forEach(m => m.dispose());
+                this.group.clear();
+            }
+        }
+
+        class VisualizerClassicBars {
+            constructor() {
+                this.name = "3. Classic 3D Bars";
+                this.needsGlossyFloor = false;
+                this.bars = [];
+                this.group = new THREE.Group();
+                this.geometries = []; this.materials = [];
+            }
+            track(o) { if (o.isGeometry) this.geometries.push(o); if (o.isMaterial) this.materials.push(o); return o; }
+            init(count, parentGroup) {
+                parentGroup.add(this.group);
+                const geo = this.track(new THREE.BoxGeometry(1, 1, 1));
+                geo.translate(0, 0.5, 0);
+                const span = 4.0 * ST.size;
+                const startX = -(count - 1) * span / 2;
+                for (let i = 0; i < count; i++) {
+                    const hue = (i / count);
+                    const mat = this.track(new THREE.MeshStandardMaterial({
+                        color: new THREE.Color().setHSL(hue, 0.8, 0.5), roughness: 0.6, metalness: 0.2
+                    }));
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(startX + i * span, 0, 0);
+                    mesh.scale.set(3.0 * ST.size, 1, 3.0 * ST.size);
+                    mesh.castShadow = true; mesh.receiveShadow = true;
+                    this.group.add(mesh); this.bars.push(mesh);
+                }
+            }
+            update(freqArray, timeArray, peakVal) {
+                const usableBins = Math.floor(freqArray.length * 0.5);
+                for (let i = 0; i < this.bars.length; i++) {
+                    const idx = Math.floor((i / this.bars.length) * usableBins);
+                    const val = freqArray[idx] / 255.0;
+                    const h = 1 + val * 50 * (ST.sens / 80) * ST.size;
+                    this.bars[i].scale.y += (h - this.bars[i].scale.y) * 0.2;
+                }
+            }
+            destroy() { this.geometries.forEach(g => g.dispose()); this.materials.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerNeonCylinders {
+            constructor() {
+                this.name = "4. Neon Cylinders";
+                this.needsGlossyFloor = true;
+                this.cyls = [];
+                this.group = new THREE.Group();
+                this.geometries = []; this.materials = [];
+            }
+            track(o) { if (o.isGeometry) this.geometries.push(o); if (o.isMaterial) this.materials.push(o); return o; }
+            init(count, parentGroup) {
+                parentGroup.add(this.group);
+                const geo = this.track(new THREE.CylinderGeometry(1, 1, 1, 32));
+                geo.translate(0, 0.5, 0);
+                const span = 5.0 * ST.size;
+                const startX = -(count - 1) * span / 2;
+                for (let i = 0; i < count; i++) {
+                    const mat = this.track(new THREE.MeshStandardMaterial({
+                        color: 0x222222, emissive: 0x000000, roughness: 0.2, metalness: 0.8
+                    }));
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(startX + i * span, 0, 0);
+                    mesh.scale.set(1.5 * ST.size, 1, 1.5 * ST.size);
+                    mesh.baseHue = (i / count);
+                    this.group.add(mesh); this.cyls.push(mesh);
+                }
+            }
+            update(freqArray, timeArray, peakVal) {
+                const usableBins = Math.floor(freqArray.length * 0.5);
+                for (let i = 0; i < this.cyls.length; i++) {
+                    const idx = Math.floor((i / this.cyls.length) * usableBins);
+                    const val = freqArray[idx] / 255.0;
+                    const h = 1 + val * 60 * (ST.sens / 80) * ST.size;
+                    this.cyls[i].scale.y += (h - this.cyls[i].scale.y) * 0.25;
+                    this.cyls[i].material.emissive.setHSL(this.cyls[i].baseHue, 1.0, val * 0.8 * ST.inten);
+                    this.cyls[i].scale.x = this.cyls[i].scale.z = (1.5 + val * 2.0) * ST.size;
+                }
+            }
+            destroy() { this.geometries.forEach(g => g.dispose()); this.materials.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerVoxelStacks {
+            constructor() {
+                this.name = "5. Voxel Stacks";
+                this.needsGlossyFloor = false;
+                this.stacks = [];
+                this.group = new THREE.Group();
+                this.geometries = []; this.materials = [];
+            }
+            track(o) { if (o.isGeometry) this.geometries.push(o); if (o.isMaterial) this.materials.push(o); return o; }
+            init(count, parentGroup) {
+                parentGroup.add(this.group);
+                const geo = this.track(new THREE.BoxGeometry(0.9, 0.9, 0.9));
+                const span = 3.0 * ST.size;
+                const startX = -(count - 1) * span / 2;
+                const stackHeight = 20;
+                for (let i = 0; i < count; i++) {
+                    const column = [];
+                    const basex = startX + i * span;
+                    for (let j = 0; j < stackHeight; j++) {
+                        const hue = (j / stackHeight);
+                        const mat = this.track(new THREE.MeshStandardMaterial({
+                            color: new THREE.Color().setHSL(hue, 0.9, 0.2),
+                            emissive: new THREE.Color().setHSL(hue, 0.9, 0.5),
+                            emissiveIntensity: 0
+                        }));
+                        const mesh = new THREE.Mesh(geo, mat);
+                        mesh.position.set(basex, j * ST.size * 1.0 + 0.5, 0);
+                        mesh.scale.setScalar(ST.size * 2.5);
+                        this.group.add(mesh);
+                        column.push(mesh);
+                    }
+                    this.stacks.push(column);
+                }
+            }
+            update(freqArray, timeArray, peakVal) {
+                const usableBins = Math.floor(freqArray.length * 0.5);
+                for (let i = 0; i < this.stacks.length; i++) {
+                    const idx = Math.floor((i / this.stacks.length) * usableBins);
+                    const val = freqArray[idx] / 255.0;
+                    const activeCount = Math.floor(val * this.stacks[i].length * (ST.sens / 80));
+                    for (let j = 0; j < this.stacks[i].length; j++) {
+                        const targetGlow = j < activeCount ? 1.0 * ST.inten : 0.0;
+                        this.stacks[i][j].material.emissiveIntensity += (targetGlow - this.stacks[i][j].material.emissiveIntensity) * 0.3;
+                    }
+                }
+            }
+            destroy() { this.geometries.forEach(g => g.dispose()); this.materials.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerAbstractPyramids {
+            constructor() {
+                this.name = "6. Abstract Pyramids";
+                this.needsGlossyFloor = true;
+                this.pyramids = [];
+                this.group = new THREE.Group();
+                this.geometries = []; this.materials = [];
+            }
+            track(o) { if (o.isGeometry) this.geometries.push(o); if (o.isMaterial) this.materials.push(o); return o; }
+            init(count, parentGroup) {
+                parentGroup.add(this.group);
+                const geo = this.track(new THREE.ConeGeometry(1, 1, 4));
+                geo.translate(0, 0.5, 0);
+                const span = 4.0 * ST.size;
+                const startX = -(count - 1) * span / 2;
+                for (let i = 0; i < count; i++) {
+                    const mat = this.track(new THREE.MeshPhysicalMaterial({
+                        color: 0xffffff, metalness: 0.9, roughness: 0.1, clearcoat: 1.0, wireframe: i % 2 === 0
+                    }));
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(startX + i * span, 0, 0);
+                    mesh.scale.set(3.5 * ST.size, 1, 3.5 * ST.size);
+                    mesh.castShadow = true; mesh.receiveShadow = true;
+                    mesh.baseHue = (i / count);
+                    this.group.add(mesh); this.pyramids.push(mesh);
+                }
+            }
+            update(freqArray, timeArray, peakVal) {
+                const usableBins = Math.floor(freqArray.length * 0.6);
+                for (let i = 0; i < this.pyramids.length; i++) {
+                    const idx = Math.floor((i / this.pyramids.length) * usableBins);
+                    const val = freqArray[idx] / 255.0;
+                    const h = 1 + val * 60 * (ST.sens / 80) * ST.size;
+                    this.pyramids[i].scale.y += (h - this.pyramids[i].scale.y) * 0.2;
+                    this.pyramids[i].rotation.y += ST.spinSpd * (1 + val * 10);
+                    this.pyramids[i].material.color.setHSL(this.pyramids[i].baseHue, 1.0, 0.2 + val * 0.8 * ST.inten);
+                }
+            }
+            destroy() { this.geometries.forEach(g => g.dispose()); this.materials.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerHexagonPillars {
+            constructor() {
+                this.name = "7. Hexagon Pillars";
+                this.needsGlossyFloor = false;
+                this.hexes = [];
+                this.group = new THREE.Group();
+                this.geometries = []; this.materials = [];
+            }
+            track(o) { if (o.isGeometry) this.geometries.push(o); if (o.isMaterial) this.materials.push(o); return o; }
+            init(count, parentGroup) {
+                parentGroup.add(this.group);
+                const geo = this.track(new THREE.CylinderGeometry(1, 1, 1, 6));
+                geo.translate(0, 0.5, 0);
+                const span = 3.5 * ST.size;
+                const startX = -(count - 1) * span / 2;
+                for (let i = 0; i < count; i++) {
+                    const mat = this.track(new THREE.MeshStandardMaterial({
+                        color: 0x222222, emissive: 0x000000, roughness: 0.4
+                    }));
+                    const mesh = new THREE.Mesh(geo, mat);
+                    const zDepth = Math.abs(i - (count - 1) / 2) * 2.0 * ST.size;
+
+                    mesh.position.set(startX + i * span, 0, zDepth);
+                    mesh.scale.set(3.0 * ST.size, 1, 3.0 * ST.size);
+                    mesh.castShadow = true; mesh.receiveShadow = true;
+                    mesh.baseHue = (i / count);
+                    this.group.add(mesh); this.hexes.push(mesh);
+                }
+            }
+            update(freqArray, timeArray, peakVal) {
+                const usableBins = Math.floor(freqArray.length * 0.5);
+                for (let i = 0; i < this.hexes.length; i++) {
+                    const idx = Math.floor((i / this.hexes.length) * usableBins);
+                    const val = freqArray[idx] / 255.0;
+                    const h = 1 + val * 45 * (ST.sens / 80) * ST.size;
+                    this.hexes[i].scale.y += (h - this.hexes[i].scale.y) * 0.25;
+                    this.hexes[i].material.emissive.setHSL(this.hexes[i].baseHue, 1.0, val * 0.5 * ST.inten);
+                }
+            }
+            destroy() { this.geometries.forEach(g => g.dispose()); this.materials.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerWaveRibbon {
+            constructor() {
+                this.name = "8. Wave Ribbon"; this.group = new THREE.Group(); this.geometries = []; this.materials = [];
+            }
+            track(o) { if (o.isGeometry) this.geometries.push(o); if (o.isMaterial) this.materials.push(o); return o; }
+            init(count, pGroup) {
+                pGroup.add(this.group);
+                this.count = Math.max(64, count * 4);
+                const geo = this.track(new THREE.BufferGeometry());
+                geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.count * 3), 3));
+                const mat = this.track(new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 3 }));
+                this.line = new THREE.Line(geo, mat);
+                this.group.add(this.line);
+            }
+            update(f, t, p) {
+                const pos = this.line.geometry.attributes.position.array;
+                const span = 80 * ST.size; const uBins = Math.floor(f.length * 0.4);
+                for (let i = 0; i < this.count; i++) {
+                    const val = f[Math.floor((i / this.count) * uBins)] / 255.0;
+                    pos[i * 3] = (i / (this.count - 1)) * span - (span / 2);
+                    pos[i * 3 + 1] = val * 40 * (ST.sens / 80) * ST.size;
+                    pos[i * 3 + 2] = 0;
+                }
+                this.line.geometry.attributes.position.needsUpdate = true;
+                this.line.material.color.setHSL((Date.now() % 5000) / 5000, 1.0, 0.4 + p / 512.0 * ST.inten);
+            }
+            destroy() { this.geometries.forEach(g => g.dispose()); this.materials.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerCircularRing {
+            constructor() {
+                this.name = "9. Circular Ring"; this.bars = []; this.group = new THREE.Group(); this.geos = []; this.mats = [];
+            }
+            track(o) { if (o.isGeometry) this.geos.push(o); if (o.isMaterial) this.mats.push(o); return o; }
+            init(count, pGroup) {
+                pGroup.add(this.group);
+                const geo = this.track(new THREE.BoxGeometry(1, 1, 1)); geo.translate(0, 0.5, 0);
+                const radius = Math.max(10, count * 0.5) * ST.size;
+                for (let i = 0; i < count; i++) {
+                    const a = (i / count) * Math.PI * 2;
+                    const mat = this.track(new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(i / count, 1.0, 0.5) }));
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(Math.cos(a) * radius, 0, Math.sin(a) * radius);
+                    mesh.lookAt(0, 0, 0);
+                    mesh.scale.set(1.5 * ST.size, 1, 1.5 * ST.size);
+                    this.group.add(mesh); this.bars.push(mesh);
+                }
+            }
+            update(f) {
+                const uBins = Math.floor(f.length * 0.5);
+                for (let i = 0; i < this.bars.length; i++) {
+                    const val = f[Math.floor((i / this.bars.length) * uBins)] / 255.0;
+                    this.bars[i].scale.y += (1 + val * 40 * (ST.sens / 80) * ST.size - this.bars[i].scale.y) * 0.2;
+                }
+                this.group.rotation.y += ST.spinSpd;
+            }
+            destroy() { this.geos.forEach(g => g.dispose()); this.mats.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerCircularWave {
+            constructor() {
+                this.name = "10. Circular Wave"; this.group = new THREE.Group(); this.geos = []; this.mats = [];
+            }
+            track(o) { if (o.isGeometry) this.geos.push(o); if (o.isMaterial) this.mats.push(o); return o; }
+            init(count, pGroup) {
+                pGroup.add(this.group);
+                this.count = Math.max(64, count * 4);
+                const geo = this.track(new THREE.BufferGeometry());
+                geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((this.count + 1) * 3), 3)); // +1 to close loop
+                const mat = this.track(new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 3 }));
+                this.line = new THREE.Line(geo, mat);
+                this.group.add(this.line);
+            }
+            update(f, t, p) {
+                const pos = this.line.geometry.attributes.position.array;
+                const r = 15 * ST.size; const uBins = Math.floor(f.length * 0.4);
+                for (let i = 0; i <= this.count; i++) {
+                    const logicalI = i % this.count;
+                    const val = f[Math.floor((logicalI / this.count) * uBins)] / 255.0;
+                    const a = (i / this.count) * Math.PI * 2;
+                    const ampR = r + val * 20 * (ST.sens / 80) * ST.size;
+                    pos[i * 3] = Math.cos(a) * ampR;
+                    pos[i * 3 + 1] = val * 20 * ST.size; // lift up on beat
+                    pos[i * 3 + 2] = Math.sin(a) * ampR;
+                }
+                this.line.geometry.attributes.position.needsUpdate = true;
+                this.line.rotation.y += ST.spinSpd;
+                this.line.material.color.setHSL((Date.now() % 5000) / 5000, 1.0, 0.4 + p / 512.0 * ST.inten);
+            }
+            destroy() { this.geos.forEach(g => g.dispose()); this.mats.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerAudioScope {
+            constructor() {
+                this.name = "11. Audio Scope"; this.group = new THREE.Group(); this.geos = []; this.mats = [];
+            }
+            track(o) { if (o.isGeometry) this.geos.push(o); if (o.isMaterial) this.mats.push(o); return o; }
+            init(count, pGroup) {
+                pGroup.add(this.group);
+                this.count = 512; // Time domain needs high res
+                const geo = this.track(new THREE.BufferGeometry());
+                geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.count * 3), 3));
+                const mat = this.track(new THREE.LineBasicMaterial({ color: 0x00ff44, linewidth: 2 }));
+                this.line = new THREE.Line(geo, mat);
+                this.group.add(this.line);
+            }
+            update(f, t, p) {
+                const pos = this.line.geometry.attributes.position.array;
+                const span = 80 * ST.size;
+                // timeDomainData is around 128 (0 silence).
+                for (let i = 0; i < this.count; i++) {
+                    const idx = Math.floor((i / this.count) * t.length);
+                    const val = (t[idx] - 128) / 128.0; // -1 to 1
+                    pos[i * 3] = (i / (this.count - 1)) * span - (span / 2);
+                    pos[i * 3 + 1] = 10 + val * 30 * (ST.sens / 80) * ST.size;
+                    pos[i * 3 + 2] = 0;
+                }
+                this.line.geometry.attributes.position.needsUpdate = true;
+                this.line.material.color.setHSL(0.3, 1.0, 0.4 * ST.inten + Math.abs((t[0] - 128) / 128) * 0.6);
+            }
+            destroy() { this.geos.forEach(g => g.dispose()); this.mats.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerCyberGrid {
+            constructor() {
+                this.name = "12. Cyber Grid Terrain"; this.group = new THREE.Group(); this.geos = []; this.mats = [];
+            }
+            track(o) { if (o.isGeometry) this.geos.push(o); if (o.isMaterial) this.mats.push(o); return o; }
+            init(count, pGroup) {
+                pGroup.add(this.group);
+                const res = Math.min(64, Math.max(16, count * 2));
+                this.geo = this.track(new THREE.PlaneGeometry(100 * ST.size, 100 * ST.size, res, res));
+                this.geo.rotateX(-Math.PI / 2);
+                const mat = this.track(new THREE.MeshStandardMaterial({
+                    color: 0x111111, emissive: 0x00aaff, emissiveIntensity: 0.2, wireframe: true
+                }));
+                this.mesh = new THREE.Mesh(this.geo, mat);
+                this.mesh.position.y = 1;
+                this.group.add(this.mesh);
+            }
+            update(f, t, p) {
+                const pos = this.geo.attributes.position.array;
+                const vCount = pos.length / 3;
+                let gridPeak = 0;
+                for (let i = 0; i < vCount; i++) {
+                    const x = pos[i * 3];
+                    const z = pos[i * 3 + 2];
+                    const dist = Math.sqrt(x * x + z * z);
+                    const maxDist = 70 * ST.size;
+                    let idx = Math.floor((dist / maxDist) * f.length * 0.4);
+                    idx = Math.max(0, Math.min(f.length - 1, idx));
+                    const val = f[idx] / 255.0;
+                    if (val > gridPeak) gridPeak = val;
+
+                    const tWave = Date.now() * 0.005;
+                    const ripple = Math.sin(dist * 0.5 - tWave) * 1.5;
+
+                    pos[i * 3 + 1] = (val * 15 * (ST.sens / 80) + ripple) * ST.size;
+                }
+                this.geo.attributes.position.needsUpdate = true;
+                this.geo.computeVertexNormals();
+                this.mesh.material.emissiveIntensity = 0.2 + gridPeak * ST.inten * 1.5;
+                this.mesh.rotation.y += ST.spinSpd * 0.2;
+            }
+            destroy() { this.geos.forEach(g => g.dispose()); this.mats.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerDNAHelix {
+            constructor() {
+                this.name = "13. DNA Helix"; this.spheres = []; this.group = new THREE.Group(); this.geos = []; this.mats = [];
+                this.needsGlossyFloor = true;
+            }
+            track(o) { if (o.isGeometry) this.geos.push(o); if (o.isMaterial) this.mats.push(o); return o; }
+            init(count, pGroup) {
+                pGroup.add(this.group);
+                const geo = this.track(new THREE.SphereGeometry(1, 16, 16));
+                const pairs = Math.min(100, count * 2);
+                for (let i = 0; i < pairs; i++) {
+                    const m1 = this.track(new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0x550000, metalness: 0.5, roughness: 0.2 }));
+                    const m2 = this.track(new THREE.MeshStandardMaterial({ color: 0x00aaff, emissive: 0x002255, metalness: 0.5, roughness: 0.2 }));
+                    const s1 = new THREE.Mesh(geo, m1);
+                    const s2 = new THREE.Mesh(geo, m2);
+                    this.group.add(s1); this.group.add(s2);
+                    this.spheres.push({ s1, s2, i, total: pairs });
+                }
+            }
+            update(f) {
+                const uBins = Math.floor(f.length * 0.5);
+                const time = Date.now() * 0.001;
+                for (let j = 0; j < this.spheres.length; j++) {
+                    const { s1, s2, i, total } = this.spheres[j];
+                    const idx = Math.floor((i / total) * uBins);
+                    const val = f[idx] / 255.0;
+
+                    const twist = (i / total) * Math.PI * 4 + time + (val * 1.5 * ST.sens / 80);
+                    const y = (i - total / 2) * 1.5 * ST.size;
+                    const radius = (5 + val * 10) * ST.size;
+
+                    s1.position.set(Math.cos(twist) * radius, y + 15, Math.sin(twist) * radius);
+                    s2.position.set(Math.cos(twist + Math.PI) * radius, y + 15, Math.sin(twist + Math.PI) * radius);
+
+                    const scale = (0.5 + val * 1.5) * ST.size;
+                    s1.scale.setScalar(scale); s2.scale.setScalar(scale);
+                    s1.material.emissiveIntensity = val * 2 * ST.inten;
+                    s2.material.emissiveIntensity = val * 2 * ST.inten;
+                }
+                this.group.rotation.y += ST.spinSpd;
+            }
+            destroy() { this.geos.forEach(g => g.dispose()); this.mats.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerWireframeTunnel {
+            constructor() {
+                this.name = "14. Wireframe Tunnel"; this.rings = []; this.group = new THREE.Group(); this.geos = []; this.mats = [];
+            }
+            track(o) { if (o.isGeometry) this.geos.push(o); if (o.isMaterial) this.mats.push(o); return o; }
+            init(count, pGroup) {
+                pGroup.add(this.group);
+                const rCount = Math.max(10, count);
+                for (let i = 0; i < rCount; i++) {
+                    const geo = this.track(new THREE.TorusGeometry(15, 0.5, 8, 32));
+                    const mat = this.track(new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(i / rCount, 1, 0.5), wireframe: true }));
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.z = -i * 10 * ST.size;
+                    mesh.position.y = 10;
+                    this.group.add(mesh); this.rings.push({ mesh, i, total: rCount });
+                }
+            }
+            update(f) {
+                const uBins = Math.floor(f.length * 0.5);
+                const time = Date.now() * 0.005 * (ST.spinSpd / 0.02);
+                for (let j = 0; j < this.rings.length; j++) {
+                    const r = this.rings[j];
+                    const idx = Math.floor((r.i / r.total) * uBins);
+                    const val = f[idx] / 255.0;
+
+                    r.mesh.position.z += 0.5 + val * 2 * (ST.sens / 80);
+                    if (r.mesh.position.z > 20) r.mesh.position.z -= r.total * 10 * ST.size;
+
+                    r.mesh.scale.setScalar((1 + val * 0.3) * ST.size);
+                    r.mesh.rotation.z = time * 0.1 + r.i * 0.2;
+                }
+            }
+            destroy() { this.geos.forEach(g => g.dispose()); this.mats.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerParticleFountain {
+            constructor() {
+                this.name = "15. Particle Fountain"; this.group = new THREE.Group(); this.geos = []; this.mats = [];
+                this.needsGlossyFloor = true;
+            }
+            track(o) { if (o.isGeometry) this.geos.push(o); if (o.isMaterial) this.mats.push(o); return o; }
+            init(count, pGroup) {
+                pGroup.add(this.group);
+                this.pCount = Math.max(1000, count * 50);
+                const geo = this.track(new THREE.BufferGeometry());
+                const pos = new Float32Array(this.pCount * 3);
+                this.vels = [];
+                for (let i = 0; i < this.pCount; i++) {
+                    pos[i * 3] = pos[i * 3 + 1] = pos[i * 3 + 2] = 0;
+                    this.vels.push({ x: 0, y: 0, z: 0, active: false });
+                }
+                geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+                const mat = this.track(new THREE.PointsMaterial({ color: 0x00ffff, size: 0.5 * ST.size, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending }));
+                this.points = new THREE.Points(geo, mat);
+                this.group.add(this.points);
+            }
+            update(f) {
+                const pos = this.points.geometry.attributes.position.array;
+                const bass = f[2] / 255.0;
+                const spawnCount = Math.floor(bass * 20 * (ST.sens / 80));
+                let spawned = 0;
+
+                for (let i = 0; i < this.pCount; i++) {
+                    if (this.vels[i].active) {
+                        pos[i * 3] += this.vels[i].x * (ST.spinSpd / 0.02) * 1.5;
+                        pos[i * 3 + 1] += this.vels[i].y * (ST.spinSpd / 0.02) * 1.5;
+                        pos[i * 3 + 2] += this.vels[i].z * (ST.spinSpd / 0.02) * 1.5;
+                        this.vels[i].y -= 0.05;
+                        if (pos[i * 3 + 1] < 0) this.vels[i].active = false;
+                    } else if (spawned < spawnCount) {
+                        this.vels[i].active = true;
+                        pos[i * 3] = pos[i * 3 + 1] = pos[i * 3 + 2] = 0;
+                        this.vels[i].x = (Math.random() - 0.5) * 2;
+                        this.vels[i].y = 1 + Math.random() * 2 * ST.size;
+                        this.vels[i].z = (Math.random() - 0.5) * 2;
+                        spawned++;
+                    } else {
+                        pos[i * 3 + 1] = -100;
+                    }
+                }
+                this.points.geometry.attributes.position.needsUpdate = true;
+                this.points.material.color.setHSL((Date.now() % 2000) / 2000, 1.0, 0.4 * ST.inten + 0.2);
+            }
+            destroy() { this.geos.forEach(g => g.dispose()); this.mats.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerFloatingOrbs {
+            constructor() {
+                this.name = "16. Floating Orbs"; this.orbs = []; this.group = new THREE.Group(); this.geos = []; this.mats = [];
+                this.needsGlossyFloor = true;
+            }
+            track(o) { if (o.isGeometry) this.geos.push(o); if (o.isMaterial) this.mats.push(o); return o; }
+            init(count, pGroup) {
+                pGroup.add(this.group);
+                const geo = this.track(new THREE.SphereGeometry(1, 16, 16));
+                for (let i = 0; i < count; i++) {
+                    const mat = this.track(new THREE.MeshPhysicalMaterial({
+                        color: new THREE.Color().setHSL(Math.random(), 0.8, 0.5),
+                        metalness: 0.2, roughness: 0.1, transmission: 0.8, thickness: 1.0
+                    }));
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.castShadow = true;
+                    // random position
+                    mesh.baseX = (Math.random() - 0.5) * 80 * ST.size;
+                    mesh.baseZ = (Math.random() - 0.5) * 80 * ST.size;
+                    mesh.position.set(mesh.baseX, 0, mesh.baseZ);
+                    this.group.add(mesh);
+                    this.orbs.push({ mesh, i });
+                }
+            }
+            update(f) {
+                const uBins = Math.floor(f.length * 0.5);
+                const time = Date.now() * 0.001;
+                for (let i = 0; i < this.orbs.length; i++) {
+                    const o = this.orbs[i];
+                    const val = f[Math.floor((o.i / this.orbs.length) * uBins)] / 255.0;
+
+                    const targetY = 2 + val * 30 * (ST.sens / 80) * ST.size + Math.sin(time + o.i) * 2;
+                    o.mesh.position.y += (targetY - o.mesh.position.y) * 0.1;
+                    const s = (1 + val * 2) * ST.size;
+                    o.mesh.scale.set(s, s, s);
+                }
+                this.group.rotation.y += ST.spinSpd * 0.5;
+            }
+            destroy() { this.geos.forEach(g => g.dispose()); this.mats.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerStarfieldPulse {
+            constructor() {
+                this.name = "17. Starfield Pulse"; this.group = new THREE.Group(); this.geos = []; this.mats = [];
+            }
+            track(o) { if (o.isGeometry) this.geos.push(o); if (o.isMaterial) this.mats.push(o); return o; }
+            init(count, pGroup) {
+                pGroup.add(this.group);
+                this.pCount = Math.max(500, count * 20);
+                const geo = this.track(new THREE.BufferGeometry());
+                const pos = new Float32Array(this.pCount * 3);
+                for (let i = 0; i < this.pCount; i++) {
+                    pos[i * 3] = (Math.random() - 0.5) * 200 * ST.size;
+                    pos[i * 3 + 1] = (Math.random() - 0.5) * 200 * ST.size;
+                    pos[i * 3 + 2] = (Math.random() - 0.5) * 200 * ST.size;
+                }
+                geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+                const mat = this.track(new THREE.PointsMaterial({ color: 0xffffff, size: 0.8 * ST.size }));
+                this.points = new THREE.Points(geo, mat);
+                this.group.add(this.points);
+            }
+            update(f, t, p) {
+                const pos = this.points.geometry.attributes.position.array;
+                const speed = 0.5 + Math.pow(p / 255.0, 2) * 5 * (ST.sens / 80);
+                for (let i = 0; i < this.pCount; i++) {
+                    pos[i * 3 + 2] += speed * (ST.spinSpd / 0.02);
+                    if (pos[i * 3 + 2] > 100) pos[i * 3 + 2] -= 200 * ST.size;
+                }
+                this.points.geometry.attributes.position.needsUpdate = true;
+                this.points.material.color.setHSL(0, 0, 0.4 + (p / 512) * ST.inten);
+            }
+            destroy() { this.geos.forEach(g => g.dispose()); this.mats.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerCityscapePulse {
+            constructor() {
+                this.name = "18. Cityscape Pulse"; this.bldgs = []; this.group = new THREE.Group(); this.geos = []; this.mats = [];
+            }
+            track(o) { if (o.isGeometry) this.geos.push(o); if (o.isMaterial) this.mats.push(o); return o; }
+            init(count, pGroup) {
+                pGroup.add(this.group);
+                const geo = this.track(new THREE.BoxGeometry(1, 1, 1));
+                geo.translate(0, 0.5, 0);
+                const gridSide = Math.ceil(Math.sqrt(count * 2));
+                const span = 4 * ST.size;
+                const start = -(gridSide - 1) * span / 2;
+
+                for (let x = 0; x < gridSide; x++) {
+                    for (let z = 0; z < gridSide; z++) {
+                        const dist = Math.sqrt(Math.pow(x - gridSide / 2, 2) + Math.pow(z - gridSide / 2, 2));
+                        const mat = this.track(new THREE.MeshStandardMaterial({
+                            color: new THREE.Color().setHSL((x / gridSide) * 0.5, 0.8, 0.4), roughness: 0.8, metalness: 0.2
+                        }));
+                        const mesh = new THREE.Mesh(geo, mat);
+                        mesh.position.set(start + x * span, 0, start + z * span);
+                        mesh.scale.set(3 * ST.size, 1, 3 * ST.size);
+                        mesh.castShadow = true; mesh.receiveShadow = true;
+                        this.group.add(mesh);
+                        this.bldgs.push({ mesh, dist });
+                    }
+                }
+            }
+            update(f) {
+                const uBins = Math.floor(f.length * 0.4);
+                for (let i = 0; i < this.bldgs.length; i++) {
+                    const b = this.bldgs[i];
+                    const idx = Math.floor((b.dist / 15) * uBins) % uBins;
+                    const val = f[idx] / 255.0;
+                    const h = 1 + val * 40 * (ST.sens / 80) * ST.size;
+                    b.mesh.scale.y += (h - b.mesh.scale.y) * 0.2;
+                }
+            }
+            destroy() { this.geos.forEach(g => g.dispose()); this.mats.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerElectricArcs {
+            constructor() {
+                this.name = "19. Electric Arcs"; this.group = new THREE.Group(); this.geos = []; this.mats = [];
+            }
+            track(o) { if (o.isGeometry) this.geos.push(o); if (o.isMaterial) this.mats.push(o); return o; }
+            init(count, pGroup) {
+                pGroup.add(this.group);
+                this.pCount = Math.max(128, count * 5);
+                const geo = this.track(new THREE.BufferGeometry());
+                geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.pCount * 3), 3));
+                const mat = this.track(new THREE.LineBasicMaterial({ color: 0x88bbff, linewidth: 2 }));
+                this.line = new THREE.Line(geo, mat);
+                this.group.add(this.line);
+            }
+            update(f, t, p) {
+                const pos = this.line.geometry.attributes.position.array;
+                const span = 60 * ST.size;
+                const peak = p / 255.0;
+
+                // Recalculate lightning path on loud sounds
+                if (peak > 0.5) {
+                    let cx = -span / 2, cy = 10, cz = 0;
+                    for (let i = 0; i < this.pCount; i++) {
+                        pos[i * 3] = cx; pos[i * 3 + 1] = cy; pos[i * 3 + 2] = cz;
+                        cx += (Math.random() + 0.2) * (span / this.pCount) * 2;
+                        cy += (Math.random() - 0.5) * 10 * peak * (ST.sens / 80);
+                        cz += (Math.random() - 0.5) * 10 * peak * (ST.sens / 80);
+                    }
+                    this.line.geometry.attributes.position.needsUpdate = true;
+                }
+                this.line.material.color.setHSL(0.6, 1.0, 0.4 + peak * 0.6 * ST.inten);
+            }
+            destroy() { this.geos.forEach(g => g.dispose()); this.mats.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        class VisualizerInfinityCubes {
+            constructor() {
+                this.name = "20. Infinity Cubes"; this.cubes = []; this.group = new THREE.Group(); this.geos = []; this.mats = [];
+            }
+            track(o) { if (o.isGeometry) this.geos.push(o); if (o.isMaterial) this.mats.push(o); return o; }
+            init(count, pGroup) {
+                pGroup.add(this.group);
+                const geo = this.track(new THREE.BoxGeometry(1, 1, 1));
+                const cCount = Math.min(15, count); // Nested too deep is chaotic
+                for (let i = 0; i < cCount; i++) {
+                    const mat = this.track(new THREE.MeshBasicMaterial({
+                        color: new THREE.Color().setHSL(i / cCount, 1.0, 0.5), wireframe: true, transparent: true, opacity: 0.8
+                    }));
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.y = 15;
+                    this.group.add(mesh);
+                    this.cubes.push({ mesh, i });
+                }
+            }
+            update(f, t, p) {
+                const uBins = Math.floor(f.length * 0.4);
+                const time = Date.now() * 0.001;
+                for (let k = 0; k < this.cubes.length; k++) {
+                    const c = this.cubes[k];
+                    const val = f[Math.floor((c.i / this.cubes.length) * uBins)] / 255.0;
+
+                    const s = (2 * (c.i + 1) + val * 10 * (ST.sens / 80)) * ST.size;
+                    c.mesh.scale.set(s, s, s);
+
+                    c.mesh.rotation.x = time * (0.2 + c.i * 0.05) * (ST.spinSpd / 0.02);
+                    c.mesh.rotation.y = time * (0.3 + c.i * 0.04) * (ST.spinSpd / 0.02);
+                    c.mesh.material.color.setHSL((c.i / this.cubes.length + time * 0.1) % 1, 1.0, 0.2 + val * 0.8 * ST.inten);
+                }
+            }
+            destroy() { this.geos.forEach(g => g.dispose()); this.mats.forEach(m => m.dispose()); this.group.clear(); }
+        }
+
+        const VISUALIZERS = [
+            VisualizerDOA,
+            VisualizerVecteezyBlocks,
+            VisualizerClassicBars,
+            VisualizerNeonCylinders,
+            VisualizerVoxelStacks,
+            VisualizerAbstractPyramids,
+            VisualizerHexagonPillars,
+            VisualizerWaveRibbon,
+            VisualizerCircularRing,
+            VisualizerCircularWave,
+            VisualizerAudioScope,
+            VisualizerCyberGrid,
+            VisualizerDNAHelix,
+            VisualizerWireframeTunnel,
+            VisualizerParticleFountain,
+            VisualizerFloatingOrbs,
+            VisualizerStarfieldPulse,
+            VisualizerCityscapePulse,
+            VisualizerElectricArcs,
+            VisualizerInfinityCubes
+        ];
+
+        let activeVis = null;
+        let activeSceneGroup = new THREE.Group();
+        scene.add(activeSceneGroup);
+
+        function rebuildVisualizer() {
+            if (activeVis) {
+                activeVis.destroy();
+                activeSceneGroup.clear();
+            }
+            buildGrid(); // Needs to run before Vis init as some styles demand specific floors
+
+            const VisClass = VISUALIZERS[ST.style];
+            activeVis = new VisClass();
+            activeVis.init(ST.dcnt, activeSceneGroup);
+
+            updateCamera();
+
+            // UI text update
+            document.getElementById('flbl').textContent = ST.style === 0 ? "SMALL BUST / BASS ←———————→ LARGE BUST / TREBLE" : "BASS ←———————→ TREBLE";
+            document.getElementById('dv').textContent = ST.dcnt + (ST.style === 0 ? " Girls" : " Elements");
+        }
+
+        // ─── AUDIO CAPTURE & RENDER LOOP ─────────────────────────────────────────────
+        async function startAudio() {
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { width: 1, height: 1, frameRate: 1 },
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+                });
+
+                const ac = new (window.AudioContext || window.webkitAudioContext)();
+                if (ac.state === 'suspended') {
+                    await ac.resume();
+                }
+                const src = ac.createMediaStreamSource(stream);
+                const an = ac.createAnalyser();
+                an.fftSize = 4096; // Higher resolution
+                src.connect(an);
+
+                ST.analyser = an;
+                ST.freqBuf = new Uint8Array(an.frequencyBinCount);
+                ST.timeBuf = new Uint8Array(an.fftSize);
+
+                stream.getAudioTracks()[0]?.addEventListener('ended', () => {
+                    document.getElementById('start').classList.remove('gone');
+                });
+
+                document.getElementById('start').classList.add('gone');
+            } catch (e) {
+                console.error("CAPTURE ERROR:", e);
+                alert('Capture Failed. Please ensure you selected the ENTIRE SCREEN tab and checked "Share system audio".\n\n' + e.message);
+            }
+        }
+
+        const clock = new THREE.Clock();
+
+        function renderLoop() {
+            requestAnimationFrame(renderLoop);
+            const delta = clock.getDelta();
+
+            if (ST.analyser && activeVis) {
+                ST.analyser.smoothingTimeConstant = ST.smooth;
+                ST.analyser.getByteFrequencyData(ST.freqBuf);
+                ST.analyser.getByteTimeDomainData(ST.timeBuf);
+
+                let peak = 0;
+                for (let i = 0; i < ST.freqBuf.length; i++) {
+                    if (ST.freqBuf[i] > peak) peak = ST.freqBuf[i];
+                }
+
+                // Update loaded visualizer
+                activeVis.update(ST.freqBuf, ST.timeBuf, peak);
+
+                document.getElementById('pkval').textContent = `PEAK: ${Math.round(peak / 255 * 100)}%`;
+
+                // Lighting Pulse
+                if (ST.lightPulse) {
+                    const bass = ST.freqBuf[2] / 255;
+                    pointLight1.intensity = 1.0 + bass * 2.5 * (ST.sens / 80) * ST.inten;
+                    pointLight2.intensity = 1.0 + bass * 2.5 * (ST.sens / 80) * ST.inten;
+                } else {
+                    pointLight1.intensity = 1.5;
+                    pointLight2.intensity = 1.5;
+                }
+            } else if (activeVis) {
+                // Idle animation map empty arrays
+                const mockArr = new Uint8Array(2048);
+                const t = clock.elapsedTime;
+                for (let i = 0; i < mockArr.length; i++) {
+                    mockArr[i] = (Math.sin(t * 2 + i * 0.1) * 128 + 128) * 0.3;
+                }
+                activeVis.update(mockArr, mockArr, 100);
+            }
+
+            // Auto Cam
+            if (ST.cam === 'auto') {
+                ST.autoCamAngle += delta * 0.2;
+                const span = Math.max(90, ST.dcnt * 5);
+                camera.position.set(Math.cos(ST.autoCamAngle) * span, 18 + Math.sin(ST.autoCamAngle * 0.5) * 8, Math.sin(ST.autoCamAngle) * span);
+                camera.lookAt(0, 8, 0);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // ─── UI CONTROLS ─────────────────────────────────────────────────────────────
+
+        // Build the dynamic dropdown for visualizers
+        const styleSelect = document.getElementById('vstyle');
+        VISUALIZERS.forEach((V, idx) => {
+            const opt = document.createElement('option');
+            opt.value = idx;
+            opt.textContent = new V().name;
+            styleSelect.appendChild(opt);
+        });
+        styleSelect.onchange = (e) => {
+            ST.style = parseInt(e.target.value);
+            rebuildVisualizer();
+        };
+
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('startBtn').textContent = "▶  Capture Audio";
+        document.getElementById('startBtn').addEventListener('click', startAudio);
+
+        // Themes
+        const themeRow = document.getElementById('themeRow');
+        THEMES.forEach((t, i) => {
+            const sw = document.createElement('div');
+            sw.className = 'tsw' + (i === 0 ? ' on' : '');
+            sw.title = t.name;
+            sw.style.background = `linear-gradient(135deg, #${t.c1.toString(16).padStart(6, '0')}, #${t.c2.toString(16).padStart(6, '0')})`;
+            sw.onclick = () => {
+                document.querySelectorAll('.tsw').forEach(s => s.classList.remove('on'));
+                sw.classList.add('on');
+                ST.theme = i;
+                pointLight1.color.setHex(t.c1);
+                pointLight2.color.setHex(t.c2);
+                buildGrid(); // update grid colors
+            };
+            themeRow.appendChild(sw);
+        });
+
+        // Camera
+        document.querySelectorAll('.cam-btn').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('on'));
+                btn.classList.add('on');
+                ST.cam = btn.dataset.cam;
+                updateCamera();
+            };
+        });
+
+        // Sliders
+        const slds = [
+            { id: 'sens', prop: 'sens', format: v => v + '%' },
+            { id: 'smooth', prop: 'smooth', scale: 0.01, format: v => v + '%' },
+            { id: 'size', prop: 'size', scale: 0.01, format: v => v + '%' },
+            { id: 'inten', prop: 'inten', scale: 0.01, format: v => v + '%' },
+            { id: 'spin', prop: 'spinSpd', scale: 0.001, format: v => v + '%' }
+        ];
+        slds.forEach(s => {
+            document.getElementById(s.id).oninput = e => {
+                const val = +e.target.value;
+                ST[s.prop] = s.scale ? val * s.scale : val;
+                document.getElementById(s.id.replace('en', 'nt').replace('sz', 's') + 'v').textContent = s.format(val);
+                // hacky textContent grab, better to use sibling but this works for predefined IDs
+            };
+        });
+
+        // Exact text ID updates
+        document.getElementById('sens').oninput = e => { ST.sens = +e.target.value; document.getElementById('sv').textContent = e.target.value + '%'; };
+        document.getElementById('smooth').oninput = e => { ST.smooth = +e.target.value / 100; document.getElementById('smv').textContent = e.target.value + '%'; };
+        document.getElementById('size').oninput = e => { ST.size = +e.target.value / 100; document.getElementById('szv').textContent = e.target.value + '%'; rebuildVisualizer(); };
+        document.getElementById('inten').oninput = e => { ST.inten = +e.target.value / 100; document.getElementById('intv').textContent = e.target.value + '%'; };
+        document.getElementById('spin').oninput = e => { ST.spinSpd = (+e.target.value / 100) * 0.1; document.getElementById('spv').textContent = e.target.value + '%'; };
+
+        document.getElementById('dcnt').onchange = e => {
+            ST.dcnt = parseInt(e.target.value);
+            document.getElementById('dv').textContent = ST.dcnt + (ST.style === 0 ? " Girls" : " Elements");
+            rebuildVisualizer();
+        };
+
+        // Toggles
+        function makeToggle(id, key, callback) {
+            const el = document.getElementById(id);
+            el.onclick = () => {
+                ST[key] = !ST[key];
+                el.classList.toggle('on', ST[key]);
+                if (callback) callback();
+            };
+        }
+        makeToggle('tGrid', 'grid', buildGrid);
+        makeToggle('tLight', 'lightPulse');
+
+        // Panel UI
+        const panel = document.getElementById('panel');
+        document.getElementById('settBtn').onclick = e => {
+            e.stopPropagation();
+            const open = panel.classList.toggle('open');
+            document.getElementById('settBtn').classList.toggle('on', open);
+        };
+        document.getElementById('fsBtn').onclick = () => {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+            else document.exitFullscreen();
+        };
+
+        // Init App Loop
+        rebuildVisualizer();
+        requestAnimationFrame(renderLoop);
+
+    </script>
+</body>
+
+</html>
